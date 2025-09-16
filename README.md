@@ -1,7 +1,5 @@
 ## Backlog | Бэклог
 
-• Sound effects | Звуковые эффекты
-
 • Touch display controls | Управление сенсорным экраном
 
 ---
