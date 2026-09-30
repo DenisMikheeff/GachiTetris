@@ -8,7 +8,7 @@
   :root { color-scheme: dark; }
   html, body { height: 100%; margin: 0; background:#111; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
   .wrap { display:flex; align-items:center; justify-content:center; height:100%; gap:24px; padding: 16px; box-sizing: border-box; }
-  canvas { image-rendering: pixelated; background: #000; border:1px solid #333; }
+  canvas { image-rendering: pixelated; background: #000; border:1px solid #333; touch-action: none; }
   .panel { color:#ddd; max-width: 240px; }
   h1 { font-size:18px; margin:0 0 8px; color:#fff; }
   .row { margin:8px 0; }
@@ -16,6 +16,10 @@
   .muted { color:#aaa; font-size: 90%; }
   .btn { display:inline-block; padding:6px 10px; background:#1e1e1e; border:1px solid #444; color:#ddd; border-radius:6px; text-decoration:none; cursor:pointer; }
   .btn:hover { background:#262626; }
+  .touch-controls { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:10px; }
+  .touch-btn { padding:10px 8px; background:#1b1b1b; border:1px solid #444; border-radius:6px; color:#ddd; font-size:16px; touch-action:manipulation; }
+  .touch-btn:active { background:#2b2b2b; }
+  .touch-btn.wide { grid-column: span 2; }
 </style>
 </head>
 <body>
@@ -35,12 +39,20 @@
         <div><kbd>↑</kbd> spin me right round</div>
         <div><kbd>↓</kbd> soft cumdrop</div>
         <div><kbd>Space</kbd> f-ing cumming</div>
+        <div>Touch: ⬅️ ➡️ ↻ ⬇️ ⬇⬇</div>
         <div><kbd>P</kbd> Stop it, slaves <kbd>R</kbd> rASStart</div>
       </div>
     </div>
     <div class="row">
       <button class="btn" id="restartBtn" type="button">Ass we can!</button>
       <button class="btn" id="pauseBtn" type="button">Please, stop, sir!</button>
+    </div>
+    <div class="touch-controls" id="touchControls" aria-label="Touch controls">
+      <button class="touch-btn" type="button" data-action="left">⬅️</button>
+      <button class="touch-btn" type="button" data-action="rotate">↻</button>
+      <button class="touch-btn" type="button" data-action="right">➡️</button>
+      <button class="touch-btn" type="button" data-action="down">⬇️</button>
+      <button class="touch-btn wide" type="button" data-action="hardDrop">⬇⬇</button>
     </div>
   </div>
 </div>
@@ -68,6 +80,7 @@
   // Unlock audio on first user gesture
 window.addEventListener('keydown', unlockAudio, { once: true });
 window.addEventListener('mousedown', unlockAudio, { once: true });
+window.addEventListener('touchstart', unlockAudio, { once: true, passive: true });
 function unlockAudio() {
   try {
     // Play a muted sample to satisfy Chrome/Firefox/Safari policies
@@ -156,6 +169,7 @@ function unlockAudio() {
   const linesEl = document.getElementById('lines');
   const restartBtn = document.getElementById('restartBtn');
   const pauseBtn = document.getElementById('pauseBtn');
+  const touchControls = document.getElementById('touchControls');
   // Image store and loading (non-blocking)
   const pieceImages = {};
   let imagesAttempted = false;
@@ -467,6 +481,29 @@ function unlockAudio() {
     resetField(); active = null; queue = []; score = 0; lines = 0; level = 1;
     gameOver = false; paused = false; computeDropInterval(); updateUI(); spawn();
   }
+  function runGameAction(action) {
+    if (action === 'pause') { togglePause(); return; }
+    if (action === 'restart') { restart(); return; }
+    if (paused || gameOver) return;
+    if (action === 'left') tryMove(-1,0);
+    else if (action === 'right') tryMove(1,0);
+    else if (action === 'down') softDropOnce();
+    else if (action === 'rotate') tryRotateCW();
+    else if (action === 'hardDrop') hardDrop();
+  }
+  let softDropTimer = null;
+  function stopSoftDrop() {
+    if (!softDropTimer) return;
+    clearInterval(softDropTimer);
+    softDropTimer = null;
+  }
+  function startSoftDrop() {
+    runGameAction('down');
+    if (softDropTimer) return;
+    softDropTimer = setInterval(() => {
+      if (!active || paused || gameOver || !softDropOnce()) stopSoftDrop();
+    }, 80);
+  }
   function loop(t) {
     const dt = t - lastTime; lastTime = t;
     if (!paused && !gameOver) {
@@ -496,6 +533,21 @@ function unlockAudio() {
     else if (k === 'ArrowUp') { tryRotateCW(); e.preventDefault(); }
     else if (k === 'Space') { hardDrop(); e.preventDefault(); }
   }, { passive: false });
+  touchControls.addEventListener('pointerdown', (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    if (action === 'down') startSoftDrop();
+    else runGameAction(action);
+    e.preventDefault();
+  });
+  const endTouchAction = (e) => {
+    stopSoftDrop();
+    e.preventDefault();
+  };
+  touchControls.addEventListener('pointerup', endTouchAction);
+  touchControls.addEventListener('pointercancel', endTouchAction);
+  touchControls.addEventListener('pointerleave', endTouchAction);
   // Start immediately; images load in background (fallback colors used if blocked)
   resetField();
   computeDropInterval();
